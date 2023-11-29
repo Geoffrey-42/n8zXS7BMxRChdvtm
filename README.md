@@ -20,7 +20,7 @@ The project includes a forecaster class that is capable of performing stock pric
 
 In addition to stock price forecasting, a recommender class is implemented to generate a series of trading recommendations based on the outputs of the forecaster. These recommendations provide guidance for making informed trading decisions.
 
-### LSTM Model
+## Results
 
 After extensive hyperparameter tuning, the LSTM model emerged as the most effective in predicting stock prices. The implemented forecaster class incorporates several notable features, such as differencing the time series and activating the stateful mode in the LSTM. This allows the model to learn and utilize underlying patterns in the data, providing valuable context when analyzing temporal sequences of stock prices. The superior capabilities of the LSTM model position it as a valuable tool for making informed investment decisions.
 
