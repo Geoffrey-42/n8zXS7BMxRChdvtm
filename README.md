@@ -10,15 +10,17 @@ The primary objective of this project is to predict stock prices on a weekly to 
 
 To accomplish this objective, a comprehensive dataset comprising the stock prices of multiple companies from the period of 2020 to 2023 is acquired from financial libraries using Python.
 
-## Forecasting Models
+## Methodology
+
+# Forecasting Models
 
 The project includes a forecaster class that is capable of performing stock price forecasting based on a user-selected statistical model with customizable parameters. The covered models include AutoReg, ARIMA, SARIMA, fbprophet, and an LSTM model.
 
-## Recommendation System
+# Recommendation System
 
 In addition to stock price forecasting, a recommender class is implemented to generate a series of trading recommendations based on the outputs of the forecaster. These recommendations provide guidance for making informed trading decisions.
 
-## LSTM Model
+# LSTM Model
 
 After extensive hyperparameter tuning, the LSTM model emerged as the most effective in predicting stock prices. The implemented forecaster class incorporates several notable features, such as differencing the time series and activating the stateful mode in the LSTM. This allows the model to learn and utilize underlying patterns in the data, providing valuable context when analyzing temporal sequences of stock prices. The superior capabilities of the LSTM model position it as a valuable tool for making informed investment decisions.
 
