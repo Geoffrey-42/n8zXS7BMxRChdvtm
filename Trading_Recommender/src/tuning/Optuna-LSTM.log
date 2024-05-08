@@ -1,0 +1,6 @@
+{"op_code": 0, "worker_id": "3d122146-96d8-4ad5-bb17-1ff9de56e69c-2772", "study_name": "LSTM_trading_forecaster", "directions": [1]}
+{"op_code": 4, "worker_id": "3d122146-96d8-4ad5-bb17-1ff9de56e69c-2772", "study_id": 0, "datetime_start": "2024-04-25T16:04:46.744233"}
+{"op_code": 5, "worker_id": "3d122146-96d8-4ad5-bb17-1ff9de56e69c-2772", "trial_id": 0, "param_name": "n_a", "param_value_internal": 1, "distribution": "{\"name\": \"CategoricalDistribution\", \"attributes\": {\"choices\": [32, 64, 128]}}"}
+{"op_code": 5, "worker_id": "3d122146-96d8-4ad5-bb17-1ff9de56e69c-2772", "trial_id": 0, "param_name": "learning_rate", "param_value_internal": 0.003506575410186656, "distribution": "{\"name\": \"FloatDistribution\", \"attributes\": {\"step\": null, \"low\": 0.001, \"high\": 0.01, \"log\": true}}"}
+{"op_code": 5, "worker_id": "3d122146-96d8-4ad5-bb17-1ff9de56e69c-2772", "trial_id": 0, "param_name": "seq_len", "param_value_internal": 111.0, "distribution": "{\"name\": \"IntDistribution\", \"attributes\": {\"log\": false, \"step\": 1, \"low\": 60, \"high\": 180}}"}
+{"op_code": 6, "worker_id": "3d122146-96d8-4ad5-bb17-1ff9de56e69c-2772", "trial_id": 0, "state": 3, "values": null, "datetime_complete": "2024-04-25T16:04:46.811668"}

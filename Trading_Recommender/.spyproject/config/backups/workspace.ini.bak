@@ -1,0 +1,12 @@
+[workspace]
+restore_data_on_startup = True
+save_data_on_exit = True
+save_history = True
+save_non_project_files = False
+project_type = 'empty-project-type'
+recent_files = ['src\\run.py', 'src\\tuning\\optuna_tuning.py', '..\\..\\..\\..\\..\\..\\..\\..\\ProgramData\\anaconda3\\Lib\\site-packages\\pandas\\core\\indexes\\range.py', 'sanstitre0.py', 'src\\models\\LSTM_files\\LSTM_fit.py', 'src\\models\\LSTM_files\\LSTM_predict.py', 'src\\models\\LSTM.py', 'src\\models\\LSTM_files\\LSTM_model.py', 'src\\forecast\\forecaster.py', 'src\\forecast\\recommender.py', 'src\\data\\extract_dataset.py']
+
+[main]
+version = 0.2.0
+recent_files = []
+
