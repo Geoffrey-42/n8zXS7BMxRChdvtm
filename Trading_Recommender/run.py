@@ -1,5 +1,5 @@
 ## Import classes and functions from internal modules
-from src.data.extract_dataset import extract_financial_data
+from src.features.feature_engineering import get_engineered_features
 from src.data.debug_dataset import generate_debug_time_series
 from src.forecast.forecaster import forecaster
 from src.forecast.recommender import recommender
@@ -8,44 +8,49 @@ from src.tuning.optuna_tuning import optuna_search
 
 ## Import external libraries
 import os
+import warnings
 import pandas as pd
-
-pd.plotting.register_matplotlib_converters()
-
 import optuna_dashboard
 from optuna.storages import JournalStorage, JournalFileStorage
 
+pd.plotting.register_matplotlib_converters()
+warnings.simplefilter(action='ignore', category=FutureWarning)
 script_dir = os.path.dirname(__file__)
 data_dir = os.path.join(script_dir, 'data')
 
 
-### Get the data
-hist = extract_financial_data(data_dir=data_dir)
+# Choose stock to forecast
+    # AAPL: Apple
+    # BTC-USD : Bitcoin
+    # GOOG : Google
+    # META: Meta
+    # MSFT : Microsoft
+    
+symbols = ['AAPL',
+           'AMZN',
+           'BTC-USD',
+           'GOOG',
+           'META',
+           'MSFT']
+symbol = symbols[0]
+
+# Choose the forecasting horizon
+horizon = 14 # in days
+
+
+### Directly computes the engineered features from locally stored data
+data, scalers, transformer, features_names, close = get_engineered_features(stock_name = symbol,
+                                                                            data_dir = data_dir,
+                                                                            horizon = horizon)
+data_scaler, target_scaler = scalers
 debug_period = 120
 debug_series = generate_debug_time_series(debug_period)
 
-# Choose data
-symbols = ["BTC-USD",
-           "GOOG",
-           "MSFT",
-           "KCHOL.IS",
-           "BEEF3.SA",
-           "PAM",
-           "CMTOY",
-           "IMP.JO"]
-symbol = symbols[2]
-history = hist[symbol][['y']]
-
 debug = False
 if debug:
-    history = debug_series
+    data = debug_series
     symbol = 'Cosinus'
 
-# Choose the forecasting horizon
-if debug:
-    horizon = 14 # in days
-else:
-    horizon = 14
 
 ### Choose the model
 predictor_names = ['LSTM',
@@ -60,11 +65,10 @@ predictor_name = predictor_names[0]
 ## Set the model parameters
 model_args = dict()
 if predictor_name == 'LSTM':
-    model_args = {'seq_len': 120,
-                  'n_features': 1,
-                  'learning_rate': 0.0001,
+    model_args = {'seq_len': 30,
+                  'learning_rate': 0.001,
                   'loss': 'mse',
-                  'n_a': 32,
+                  'n_a': 16,
                   'dropout': 0.05,
                   'stateful_training': False,
                   'stateful_inference': False,
@@ -105,7 +109,7 @@ elif predictor_name == 'fbprophet':
 training_args = {'epochs': 100,
                  'batch_size': 32,
                  'shuffle': False,
-                 'verbose': 1}
+                 'verbose': 0}
 if debug:
     training_args = {'epochs': 100,
                      'batch_size': 32,
@@ -116,35 +120,27 @@ if debug:
 ### Setting up the simulation parameters
 
 ## Set the data parameters
-order = 0
-# Note: After running the Augmented Dickey Fuller Test, it was found that
-# these time series should be differenced 1 time to become stationary.
-# However, after experimenting, it was found that the LSTM performed better 
-# when the series were not differenced. While order should be set to 1 for 
-# linear models like ARIMA, it is recommended to keep it to 0 for LSTM
-
-if debug:
-    order = 0 # The debug series is already stationary
-
-data_args = {'history': history,
-             'order': order,
-             'symbol': symbol,
-             'plot_start_date': pd.to_datetime('2023-01-01')}
+data_args = {'features': data,
+             'close': close,
+             'f_scaler': data_scaler,
+             't_scaler': target_scaler,
+             'symbol': symbol}
 
 
 ## Set the temporal parameters
-start_date = pd.to_datetime('2023-07-01')
-end_date = pd.to_datetime('2024-01-01')
+start_date = pd.to_datetime('2023-03-01')
+end_date = pd.to_datetime('2023-12-31')
 temporal_args = {'start_date': start_date,
                  'end_date': end_date,
-                 'horizon': horizon}
+                 'horizon': horizon,
+                 'plot_start_date': pd.to_datetime('2023-01-01')}
 
 
 ## Set the trading parameters
 initial_stock = 1
 max_trade = 1
 intensity = 3 # Price variation by 1/intensity results in trading max_trade
-min_rate = 0.003 # Minimum daily rate of relative price change to trigger trading action
+min_rate = 0.001 # Minimum daily rate of relative price change to trigger trading action
 trading_args = {'initial_stock': initial_stock,
                 'max_trade': max_trade,
                 'intensity': intensity,
@@ -165,43 +161,55 @@ if hyperparameter_search:
     # Pack the arguments
     args = (model_args, data_args, temporal_args, training_args, trading_args)
     # Launch the search
-    n_a, learning_rate, seq_len = optuna_search(20,
-                                                storage,
-                                                study_name,
-                                                args,
-                                                na_range = (32, 256),
-                                                lr_range = (0.0001, 0.01),
-                                                seq_len_range = (60, 240),
-                                                dropout_range = (0, 0.4)
-                                                )
-    # Assign the results
-    model_args['n_a'] = n_a
-    model_args['learning_rate'] = learning_rate
-    model_args['seq_len'] = seq_len
-    model_args['dropout'] = dropout
+    study = optuna_search(10,
+                          storage,
+                          study_name,
+                          args,
+                          na_range = (1, 64),
+                          lr_range = (0.0001, 0.01),
+                          seq_len_range = (1, 120),
+                          dropout_range = (0, 0.2)
+                          )
+    # Print the best trial, its performance metric and its parameters
+    best_trial = study.best_trial
+    print("\nNumber of finished trials: %s"%len(study.trials))
+    print(f"\nBest trial: {best_trial}")
+    print("  MSE: ", best_trial.value)
+    print("  Params: ")
+    for key, value in best_trial.params.items():
+        print(f"    {key}: {value}")
+    
+    # Get the best parameters
+    model_args['n_a'] = best_trial.params['n_a']
+    model_args['learning_rate'] = best_trial.params['learning_rate']
+    model_args['seq_len'] = best_trial.params['seq_len']
+    model_args['dropout'] = best_trial.params['dropout']
+    
     # Run the dashboard
     optuna_dashboard.run_server(storage)
 
-
-### Calling the forecaster and recommender objects
-
-## Set the temporal parameters (Should define the test set)
-start_date = pd.to_datetime('2024-01-01')
-end_date = pd.to_datetime('2024-04-26')
-temporal_args = {'start_date': start_date,
-                 'end_date': end_date,
-                 'horizon': horizon}
-
-## Create a forecaster object
-clairvoyant = forecaster(predictor_name,
-                         model_args)
-
-## Create a recommender object
-recommend = recommender(oracle = clairvoyant,
-                        trading_args = trading_args)
-
-
-### Simulate forecasting and recommendations
-recommend(data_args,
-          temporal_args,
-          training_args) # performs the recommendation
+else:
+    ### Calling the forecaster and recommender objects
+    
+    ## Set the temporal parameters (Should define the test set)
+    start_date = pd.to_datetime('2023-03-01')
+    end_date = pd.to_datetime('2023-12-31')
+    temporal_args = {'start_date': start_date,
+                     'end_date': end_date,
+                     'horizon': horizon,
+                     'plot_start_date': pd.to_datetime('2023-01-01')}
+    
+    ## Create a forecaster object
+    clairvoyant = forecaster(predictor_name,
+                             model_args)
+    
+    ## Create a recommender object
+    recommend = recommender(oracle = clairvoyant,
+                            trading_args = trading_args)
+    
+    
+    ### Simulate forecasting and recommendations
+    recommend(data_args,
+              temporal_args,
+              training_args,
+              verbose = False) # performs the recommendation

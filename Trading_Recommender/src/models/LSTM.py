@@ -1,4 +1,3 @@
-import pandas as pd
 from src.data.prepare_dataset import process_data
 from src.models.LSTM_files.LSTM_fit import fit_LSTM
 from src.models.LSTM_files.LSTM_predict import predict_LSTM
@@ -13,8 +12,8 @@ def LSTM_forecast(args):
     
         data_args: dictionary with strings as keys
             Data arguments. Must include:
-            history: pandas DataFrame
-                Contains the historical data
+            features: pandas DataFrame
+                Time series engineered features related to the stock forecasted
             order: positive integer
                 Order of differencing required to make the series stationary
             
@@ -37,9 +36,6 @@ def LSTM_forecast(args):
             
         temporal_args: dictionary with strings as keys
             Temporal arguments. Must include:
-            history: pandas DataFrame
-                pd.DataFrame
-                DataFrame with the timeseries data to learn from
             start_date: pandas Timestamp
                 First date up to which the predictor will be fitted
             end_date: pandas Timestamp
@@ -71,26 +67,23 @@ def LSTM_forecast(args):
     current_date = temporal_args['current_date']
     horizon = temporal_args['horizon']
     
-    history = data_args['history']
-    order = data_args['order']
+    features = data_args['features']
      
     ## 1) Prepare the time series
     # Set up the time range
-    mask = history.index < current_date
-    to_fit = history[mask]
-    # Differenciate and scale the time series
-    to_fit, scaler, first_values = process_data(to_fit, order, 'pack')
-    
+    mask = features.index < current_date
+    features = features[mask]
+
     ## 2) Fit the LSTM to the historical data
-    model, training_data, val_score = fit_LSTM(to_fit, model_args, training_args)
+    model, training_data, train_score = fit_LSTM(features, model_args, training_args)
+    # print('Train MSE = %s\n Train MAE = %s'%tuple(train_score))
+    # print(f'{model.summary()}')
     
     ## 3) Make a forecast 
-    forecast = predict_LSTM(to_fit,
+    forecast = predict_LSTM(features,
                             model,
                             model_args,
-                            current_date)
-    
-    ## 4) Unscale and integrate the forecast
-    forecast = process_data(forecast, order, 'unpack', scaler, first_values)
+                            current_date,
+                            horizon)
     
     return forecast

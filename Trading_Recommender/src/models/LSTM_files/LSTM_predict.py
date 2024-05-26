@@ -4,7 +4,8 @@ import pandas as pd
 def predict_LSTM(time_series,
                  model,
                  model_args,
-                 current_date):
+                 current_date,
+                 horizon):
     '''    
     Generates a sequence of predicted stock values.
 
@@ -29,13 +30,12 @@ def predict_LSTM(time_series,
                                   model_args)
 
     ## 3) Make a prediction
-    prediction = predictor.predict_on_batch([predict_input])
+    prediction = predictor([predict_input])
     
     ## 4) Extract the dates and values and store them in lists
-    forecast = form_dataframe_from_prediction(prediction, 
-                                              model_args, 
-                                              current_date, 
-                                              len(time_series))
+    forecast = form_dataframe_from_prediction(prediction,
+                                              current_date,
+                                              horizon)
     
     return forecast
 
@@ -80,8 +80,6 @@ def prepare_input(time_series,
     Inputs
     ----------
     time_series: Pandas DataFrame with dates as indices
-                 Time series with data the model will be fitted to.
-                 It is assumed to be scaled and stationary.
 
     model_args: dictionary with the requested sequence length and/or n_features
     
@@ -92,7 +90,7 @@ def prepare_input(time_series,
     '''
     
     seq_len = model_args.get('seq_len', 5)
-    n_features = model_args.get('n_features', time_series.shape[1])
+    n_features = time_series.shape[1]-1
     
     x = np.zeros((1, seq_len, n_features))
     
@@ -102,57 +100,47 @@ def prepare_input(time_series,
 
 
 def form_dataframe_from_prediction(prediction,
-                                   model_args,
                                    current_date,
-                                   date_scaler):
+                                   horizon):
     '''    
     Generates a dataframe out of a prediction.
 
     Inputs
     ----------
-    prediction:   list of arrays, sequence of predictions
+    prediction:   list of 1 element arrays, sequence of predictions
     model_args:   dictionary, model arguments
     current_date: datetime, Date after which predictions will be made
-    date_scaler:  Positive integer, to scale the dates expressed in day numbers
 
     Outputs
     ----------
     forecast:      Pandas series with the scaled and differenced forecast
     '''
-    dates = []; y = []
-    
-    day_count = 0
-    for pred in prediction[0]:
+    # Date
+    next_date = current_date + pd.Timedelta(horizon, 'D')
+    if next_date.dayofweek >= 5: # no data on weekends
+        next_date = current_date + pd.Timedelta(horizon+2, 'D')
+    date = [next_date]
         
-        # Appending the date
-        day_count += 1
-        next_date = current_date + pd.Timedelta(day_count, 'D')
-        if next_date.dayofweek >= 5: # no data on weekends
-            day_count += 2 # Advancing to Monday
-            next_date = current_date + pd.Timedelta(day_count, 'D')
-        dates.append(next_date)
-            
-        # Appending the predicted values
-        y.append(pred)
+    # Predicted value
+    y = prediction[0]
         
-    ## Create a pandas time series containing the predictions
-    forecast = pd.DataFrame(data = {'y': y, 'ds': dates}).set_index('ds')
+    # Pandas time series containing the predictions
+    forecast = pd.DataFrame(data = {'Return': y, 'Date': date}).set_index('Date')
     
     return forecast
 
 # Testing prepare_initial_input
 if (__name__ == "__main__"):
-    import numpy as np
     print('\nTesting prepare_input')
     
     dates = pd.date_range(start='2020-01-01', 
                           end='2024-05-01', 
                           freq='B', # 'B' pour les jours ouvrés
-                          name='ds')
+                          name='Date')
     
-    y = [i for i in range(len(dates))]
+    Close = [i for i in range(len(dates))]
     
-    series = pd.DataFrame({'y': y}, index = dates)
+    series = pd.DataFrame({'Close': Close}, index = dates)
 
     x = prepare_input(series,
                       {'seq_len': 5})

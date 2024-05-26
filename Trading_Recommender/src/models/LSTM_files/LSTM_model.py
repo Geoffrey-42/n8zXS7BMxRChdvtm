@@ -26,23 +26,24 @@ def LSTM_model(args,
     else:
         stateful = args['stateful_inference']
     
-    LSTM_layer = LSTM(args['n_a'], 
-                      activation = 'relu', 
+    LSTM_layer = LSTM(args['n_a'],
                       return_state = stateful, 
                       return_sequences = False,
                       stateful = stateful,
                       dropout = args['dropout'],
+                      recurrent_dropout = args['drop_out'],
                       name = 'LSTM_layer')
     
     ## 2) Define the Concatenate layer to concatenate the hidden states
     if stateful:
-        Concatenate_layer = Concatenate(axis=1)
+        Concatenate_layer = Concatenate(axis=1,
+                                        name='Concatenate')
     else:
-        Concatenate_layer = Identity()
+        Concatenate_layer = Identity(name='Identity')
     
     
     ## 3) Define the second dense layer
-    n_out = args['n_features']*args['horizon']
+    n_out = 1
     dense_layer = Dense(n_out,
                         activation = 'linear',
                         name = 'dense_layer')

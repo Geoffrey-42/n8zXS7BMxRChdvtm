@@ -1,4 +1,5 @@
 from collections import defaultdict
+import pandas as pd
 
 class forecaster():
     '''
@@ -11,8 +12,8 @@ class forecaster():
     model_args: dictionary
         Contains arguments for the model definition
     '''
-    def __init__(self, 
-                 model_name,  
+    def __init__(self,
+                 model_name,
                  model_args = {}):
         if model_name.lower() == 'lstm':
             self.model_name = 'lstm'
@@ -35,7 +36,7 @@ class forecaster():
             self.model_name = 'simpleexpsmoothing'
             self.model_args = model_args
 
-    def __call__(self, 
+    def __call__(self,
                  data_args,
                  temporal_args,
                  training_args = {}):
@@ -46,16 +47,11 @@ class forecaster():
         ----------
         data_args: dictionary with strings as keys
             Data arguments. Must include:
-            history: pandas DataFrame
-                Contains the historical data
-            order: positive integer
-                Order of differencing required to make the time series stationary
+            features: pandas DataFrame
+                Time series engineered features related to the stock forecasted
                 
         temporal_args: dictionary with strings as keys
             Temporal arguments. Must include:
-            history: pandas DataFrame
-                pd.DataFrame
-                DataFrame with the timeseries data to learn from
             start_date: pandas Timestamp
                 First date up to which the predictor will be fitted
             end_date: pandas Timestamp
@@ -72,20 +68,23 @@ class forecaster():
             DataFrame with the forecast of stock prices and other relevant data
         '''
         
-        model_args = {}
         training_args = defaultdict(int, training_args)
         
-        forecast = self.do_forecast(data_args,
-                                    temporal_args,
-                                    self.model_args,
-                                    training_args)
+        scaled_forecast = self.do_forecast(data_args,
+                                           temporal_args,
+                                           training_args)
+        
+        # Unscale the result
+        t_scaler = data_args['t_scaler']
+        forecast = pd.DataFrame(t_scaler.inverse_transform(scaled_forecast),
+                                columns = ['Return'],
+                                index = scaled_forecast.index)
         
         return forecast
     
     def do_forecast(self,
                     data_args,
                     temporal_args,
-                    model_args,
                     training_args):
         '''
         Fits the forecaster's model to the data up to {current_date}.
@@ -103,13 +102,12 @@ class forecaster():
         args = {
             'data_args': data_args,
             'temporal_args': temporal_args,
-            'model_args': model_args,
+            'model_args': self.model_args,
             'training_args': training_args
             }
         
         if self.model_name == 'lstm':
             from src.models.LSTM import LSTM_forecast
-            args['model_args'] = self.model_args
             return LSTM_forecast(args)
         elif self.model_name == 'fbprophet':
             from src.models.fbprophet import fbprophet_forecast

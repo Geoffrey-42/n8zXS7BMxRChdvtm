@@ -1,11 +1,15 @@
 import pandas as pd
+import numpy as np
 from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
+from tsfracdiff import FractionalDifferentiator
+
+# For univariate time series only
 
 def process_data(time_series,
-                 order,
                  direction='pack',
                  scaler=None,
-                 first_values=None):
+                 fracDiff=None,
+                 lagData=None):
     '''
     Process the time series according to the following sequence:
         Raw Time Series --> Differenced Time Series --> Scaled Time Series
@@ -28,16 +32,15 @@ def process_data(time_series,
     '''
     
     if direction == 'pack':
-        time_series, first_values = difference(time_series, order)
+        time_series, fracDiff, lagData = difference(time_series)
         time_series, scaler = scale(time_series)
-        return time_series, scaler, first_values
+        return time_series, scaler, fracDiff, lagData
     if direction == 'unpack':
         time_series = unscale(time_series, scaler)
-        time_series = integrate(time_series, first_values, order)
+        time_series = integrate(time_series, fracDiff, lagData)
         return time_series
 
-def difference(time_series,
-               order):
+def difference(time_series):
     '''
     Differenciate the time series 'order' times to make it stationary
     
@@ -50,15 +53,15 @@ def difference(time_series,
     ----------
     time_series: An unscaled, stationary time series
     '''
-    first_values = []
-    for _ in range(order): 
-        first_values.append(time_series.iloc[0])
-        time_series = time_series.diff(axis=0).ffill().bfill()
-    return time_series, first_values[::-1]
+    fracDiff = FractionalDifferentiator()
+    time_series = fracDiff.FitTransform(time_series)
+    print(f'Orders of differencing: {fracDiff.orders}')
+    lagData = time_series.head(max(fracDiff.numLags))
+    return time_series, fracDiff, lagData
 
 def integrate(time_series,
-              first_values,
-              order):
+              fracDiff,
+              lagData):
     '''
     Integrate the time series 'order' times to make it stationary
     
@@ -71,10 +74,7 @@ def integrate(time_series,
     ----------
     time_series: The unscaled integrated time series
     '''
-    for _ in range(order):
-        first_value = first_values[_]
-        time_series.iloc[0] = first_value
-        time_series = time_series.cumsum(axis=0)
+    time_series = fracDiff.InverseTransform(time_series, lagData)
     return time_series
         
 
@@ -117,8 +117,8 @@ def unscale(time_series, scaler):
 
 if (__name__ == '__main__'):
     from extract_dataset import extract_financial_data
-    data = extract_financial_data()[['y']]
-    time_series = data[list(data.keys())[0]]
+    data = extract_financial_data(data_dir='../../data')
+    time_series = data[list(data.keys())[0]][['Open']]
     
     def compare(series_a, series_b, tolerance=0.1):
         mask = (series_a.sub(series_b).abs() > tolerance)
@@ -132,22 +132,18 @@ if (__name__ == '__main__'):
     print(f'There are {n_errors} errors in the unscaled series')
     
     # Testing difference and integrate
-    order = 3
-    debug_series, first_values = difference(time_series, order)
-    integrated_series = integrate(debug_series, first_values, order)
+    debug_series, fracDiff, lagData = difference(time_series)
+    integrated_series = integrate(debug_series, fracDiff, lagData)
     wrong_values, n_errors = compare(integrated_series, time_series)
     print(f'There are {n_errors} errors in the integrated series')
 
     # Testing process_data
-    order = 1
-    processed, scaler, first_values = process_data(time_series,
-                                                   order=order,
-                                                   direction='pack',
-                                                   scaler=None)
+    processed, scaler, fracDiff, lagData = process_data(time_series,
+                                                        direction='pack')
     unprocessed = process_data(processed,
-                               order=order,
                                direction='unpack',
                                scaler=scaler,
-                               first_values=first_values)
+                               fracDiff=fracDiff,
+                               lagData=lagData)
     wrong_values, n_errors = compare(unprocessed, time_series)
     print(f'There are {n_errors} errors in the unprocessed series')

@@ -1,4 +1,3 @@
-from collections import defaultdict
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -33,7 +32,8 @@ class recommender():
     def __call__(self,
                  data_args,
                  temporal_args,
-                 training_args):
+                 training_args,
+                 verbose = True):
         ''' 
         Performs a series of recommendations with the following procedure loop:
         
@@ -49,16 +49,15 @@ class recommender():
         ----------
         data_args: dictionary with strings as keys
             Data arguments. Must include:
-            history: pandas DataFrame
-                Contains the historical data
-            order: positive integer
-                Order of differencing required to make the time series stationary
+            features: pandas DataFrame
+                Contains the engineered features
+            close: pandas DataFrame
+                Historical stock price (Close)
+            t_scaler: scikit-learn scaler
+                Scaler used for the return target
                 
         temporal_args: dictionary with strings as keys
             Temporal arguments. Must include:
-            history: pandas DataFrame
-                pd.DataFrame
-                DataFrame with the timeseries data to learn from
             start_date: pandas Timestamp
                 First date up to which the predictor will be fitted
             end_date: pandas Timestamp
@@ -68,6 +67,9 @@ class recommender():
         
         training_args: dictionary with strings as keys
             Training arguments.
+        
+        verbose: Boolean
+            Whether to print current stock price and prediction during simulation
         
         Outputs
         ----------
@@ -80,12 +82,13 @@ class recommender():
         # Get the temporal arguments
         start_date = temporal_args['start_date']
         end_date = temporal_args['end_date']
-        horizon = temporal_args['horizon']
         
         # Get the historical data
-        history = data_args['history']
+        history = data_args['close']
+        features = data_args['features']
         symbol = data_args['symbol']
-        plot_start_date = data_args.get('plot_start_date', history.index[0])
+        
+        plot_start_date = temporal_args.get('plot_start_date', history.index[20])
         
         # Get the initial stock and its value
         initial_stock = self.trading_args['initial_stock']
@@ -113,21 +116,23 @@ class recommender():
         # Then current_date is updated to next_date
         
         while current_date < end_date:
-            print(f'\n{current_date = }')
+            if verbose:
+                print(f'\n{current_date = }')
             
             ## a) Forecasts the future for the {horizon} next days
+            data_args['features'] = features[features.index<=current_date]
             forecast = self.forecast(data_args,
+                                     temporal_args,
                                      training_args,
-                                     current_date, 
-                                     horizon)
+                                     current_date)
             
             # Predicted stock price {horizon} days after {current_date}
-            prediction = forecast['y'].iloc[-1]
-            print(f'\n{forecast =}')
+            prediction = forecast['Close'].iloc[-1]
             
             # {next_date} is the date of the last prediction
             next_date = forecast.index[-1]
-            print(f'\n{next_date = }')
+            if verbose:
+                print(f'\n{next_date = }')
             
             ## b) Draw a green vertical line indicating when a prediction was made
             plt.axvline(next_date, color = 'k')
@@ -146,7 +151,7 @@ class recommender():
                 break
             
             ## d) Perform a recommendation based on the stock price prediction
-            self.recommend(history, prediction, current_date, next_date)
+            self.recommend(history, prediction, current_date, next_date, verbose)
             
             ## e) Update current_date for the next iteration
             current_date = next_date
@@ -154,30 +159,43 @@ class recommender():
         current_price = self.get_price_from_date(history,
                                                  current_date)
         
-        date_adjusted_forecast, real_values = self.adjust_dates(self.predictions,
-                                                                history,
-                                                                start_date,
-                                                                end_date)
+        initial_price = self.get_price_from_date(history,
+                                                 start_date)
         
-        self.MAE, self.mae = self.compute_MAE(real_values, 
-                                              date_adjusted_forecast)
+        forecast, real_values_adjusted = self.adjust_dates(self.predictions,
+                                                           history,
+                                                           start_date,
+                                                           end_date)
         
-        self.MSE, self.mse = self.compute_MSE(real_values, 
-                                              date_adjusted_forecast)
+        baseline_forecast = self.baseline(real_values_adjusted,
+                                          initial_price)
+        
+        self.MAE, self.mae = self.compute_MAE(real_values_adjusted, 
+                                              forecast)
+        
+        self.baseline_MAE, self.baseline_mae = self.compute_MAE(real_values_adjusted, 
+                                                                baseline_forecast)
+        
+        self.MSE, self.mse = self.compute_MSE(real_values_adjusted, 
+                                              forecast)
+        
+        self.baseline_MSE, self.baseline_mse = self.compute_MSE(real_values_adjusted, 
+                                                                baseline_forecast)
         
         if self.failed_forecast:
             return None
         
         ## 3) Print information to help evaluate the trading recommendations
         
-        self.print_trading_performance(current_price,
-                                       temporal_args)
+        if verbose:
+            self.print_trading_performance(current_price,
+                                           temporal_args)
         
         
         ## 4) Plot the predictions compared to real data
         
         # Plot the Bollinger Bands in blue (bottom) and red (top)
-        rolling = history[['y']][history.index>plot_start_date].rolling(20)
+        rolling = history[history.index>=plot_start_date].rolling(20)
         mean, std = rolling.mean(), rolling.std()
         bolling_min = (mean-2*std).squeeze()
         bolling_max = (mean+2*std).squeeze()
@@ -185,8 +203,8 @@ class recommender():
         plt.plot(bolling_max, color = 'r', label = 'Bottom of Bollinger Band')
         
         # Plot the predictions (full green) VS the real data (dotted black)
-        plot_pred = self.predictions[self.predictions.index>plot_start_date]
-        plot_hist = history[history.index>plot_start_date]
+        plot_pred = self.predictions[self.predictions.index>=plot_start_date]
+        plot_hist = history[history.index>=plot_start_date][['Close']]
         plt.plot(plot_pred, color = 'g', label = 'Predictions')
         plt.plot(plot_hist, ':', color = 'k', label = 'History')
         
@@ -194,7 +212,7 @@ class recommender():
         plt.legend()
         plt.xticks(fontsize = 8) 
         plt.xlabel('Date')
-        plt.ylabel('Open')
+        plt.ylabel('Close')
         plt.title(f'Forecast and real data compared for {symbol}')
         
         # Show
@@ -257,6 +275,7 @@ class recommender():
             'value_history': [initial_value],
             'gain_history': [0],
             'net_gain_history': [0],
+            'value_change_history': [0],
             'action_history': ['HOLD']
             }
         
@@ -273,8 +292,8 @@ class recommender():
         
         Inputs
         ----------
-        history: Pandas DataFrame
-            History of stock prices and other relevant data
+        features: Pandas DataFrame
+            Time series engineered features related to the stock forecasted
         date: Timestamp
             Date requested
         
@@ -284,14 +303,15 @@ class recommender():
             Stock price at the nearest date to {date} with a known stock price.
         '''
         date = pd.Series((history.index-date).days).abs().idxmin()
-        price = history['y'].iloc[date]
+        price = history['Close'].iloc[date]
         return price
         
     def recommend(self, 
                   history, 
-                  predicted_next_price, 
+                  predicted_next_price,
                   current_date, 
-                  next_date):
+                  next_date,
+                  verbose):
         '''
         Performs a trading recommendation based on the predictor's forecast.
         Updates the recommender attributes related to stock held, 
@@ -300,13 +320,15 @@ class recommender():
         Arguments
         ----------
         history: Pandas DataFrame
-            History of stock prices and other relevant data
+            Time series of historical Close stock prices
         predicted_next_price: Float
             Most recent (latest) predicted stock price
         current_date: Timestamp
             Date up to which stock price data was known
         next_date: Timestamp
             Date up to which the stock price is predicted
+        verbose: Boolean
+            Whether to print current stock price and prediction
         
         Updates
         ----------
@@ -341,9 +363,11 @@ class recommender():
         # Get future stock price
         actual_next_price = self.get_price_from_date(history,
                                                      next_date)
-        print(f'\n{current_price = }')
-        print(f'{predicted_next_price = }')
-        print(f'{actual_next_price = }')
+        
+        if verbose:
+            print(f'\n{current_price = }')
+            print(f'{predicted_next_price = }')
+            print(f'{actual_next_price = }')
         
         # Compute predicted relative price change to help with decision making
         if current_price == 0:
@@ -368,13 +392,14 @@ class recommender():
             self.metrics_history['action_history'].append("HOLD")
         
         ## 3) Apply the action
+        value_precision = 1
         # Update trading metric values
         self.metrics['stock'] += trade
+        self.metrics_history['value_change_history'].append(round(self.metrics['stock']*actual_next_price-self.metrics['value'], value_precision))
         self.metrics['value'] = self.metrics['stock']*actual_next_price
         self.metrics['gains'] = -trade*current_price
         self.metrics['net_gains'] = trade*(actual_next_price-current_price)
         # Update historical trading metric values
-        value_precision = 1
         self.metrics_history['value_history'].append(round(self.metrics['value'], value_precision))
         self.metrics_history['gain_history'].append(round(self.metrics['gains'], value_precision))
         self.metrics_history['net_gain_history'].append(round(self.metrics['net_gains'], value_precision))
@@ -383,9 +408,9 @@ class recommender():
     
     def forecast(self, 
                  data_args,
+                 temporal_args,
                  training_args,
-                 current_date, 
-                 horizon):
+                 current_date):
         '''
         Performs a trading recommendation based on the forecaster's forecast.
         Updates the recommender attributes related to stock held, 
@@ -406,22 +431,27 @@ class recommender():
         current_date: Timestamp
             Date up to which the stock price data is learned by the model
         
-        horizon: positive integer
-            Indicates up to how many days the forecast will extend to
-        
         Outputs
         ----------
         forecast: Pandas DataFrame
-            Dataframe with predictions of stock price and other relevant data
+            Dataframe with forecast of stock price (Close)
         '''
         # Defining the temporal arguments to call the oracle
-        temporal_args = {'current_date': current_date,
-                         'horizon': horizon}
+        temporal_args['current_date'] =  current_date
         
-        # Calling the oracle
+        # Calling the oracle to forecast the return
         forecast = self.oracle(data_args,
                                temporal_args,
                                training_args)
+        
+        # Computes the forecasted Close price
+        current_close  = self.get_price_from_date(data_args['close'], current_date)
+        predicted_close = (forecast['Return'].iloc[-1] + 1)*current_close
+        
+        # Convert to DataFrame
+        forecast = pd.DataFrame(predicted_close, 
+                                columns = ['Close'], 
+                                index = forecast.index)
         
         return forecast
     
@@ -439,10 +469,6 @@ class recommender():
             
         temporal_args: dictionary with strings as keys
             Temporal arguments.
-            
-        Outputs
-        ----------
-        None
         '''
         
         ## Retrieving information
@@ -454,32 +480,34 @@ class recommender():
         value = self.metrics['value']
         gains = self.metrics['gains']
         net_gains = self.metrics['net_gains']
-        action_history = self.metrics_history['action_history']
-        value_history = self.metrics_history['value_history']
-        gain_history = self.metrics_history['gain_history']
-        net_gain_history = self.metrics_history['net_gain_history']
-        total_value_history = [round(a+b,1) for a,b in zip(gain_history, value_history)]
+        action_history = self.metrics_history['action_history'][1:]
+        value_history = self.metrics_history['value_history'][1:]
+        gain_history = self.metrics_history['gain_history'][1:]
+        net_gain_history = self.metrics_history['net_gain_history'][1:]
+        value_change_history = self.metrics_history['value_change_history'][1:]
+        total_change_history = [a+b for a,b in zip(gain_history, value_change_history)]
+        total_value_history = [a+b for a,b in zip(gain_history, value_history)]
         # Trading performance
         stock_precision = 3
         value_precision = 1
         print(f'\nThe Wallet gains per trade is (positive values = SELL)\n{list(zip(action_history, gain_history))}')
         print(f'\nThe Stock Value evolution after each trade is\n{list(zip(action_history, value_history))}')
-        print(f'\nStock + Wallet value variation after trading: \n{list(zip(action_history, total_value_history))}')
+        print(f'\nStock + Wallet value variation after trading: \n{list(zip(action_history, total_change_history))}')
         print(f'\nStock + Wallet Net Gains related to stock traded: \n{list(zip(action_history, net_gain_history))}')
         print(f'with sum of {sum(net_gain_history):.{value_precision}f}')
         print(f'\nInitial stock (Quantity = {initial_stock}) value on {start_date}: {initial_value:.{value_precision}f}')
         print(f'\nInitial stock (Quantity = {initial_stock}) value on {end_date}: {(initial_stock*current_price):.{value_precision}f}')
         print(f'\nFinal stock (Quantity = {stock:.{stock_precision}f}) value on {end_date}: {value:.{value_precision}f}')
-        print(f'\nGains from trading: {sum(gain_history):.{value_precision}f}')
+        print(f'\nExpenses from trading: {-sum(gain_history):.{value_precision}f}')
         print(f'\nBalance compared to initial stock value on {end_date} (value owned if no trading) = {(sum(gain_history) + value - initial_stock*current_price):.{value_precision}f}')
         print(f'\nBalance compared to initial stock value on {start_date}: {(sum(gain_history) + value - initial_value):.{value_precision}f}')
         # Forecasting performance
-        print(f'\n{self.MSE = }')   
         print(f'\n{self.mse = }')
-        print(f'\n{self.MAE = }')   
         print(f'\n{self.mae = }')
-        
-        return None
+        print(f'\n{self.MSE = }') 
+        print(f'\n{self.MAE = }')
+        print(f'\n{self.baseline_MSE = }')
+        print(f'\n{self.baseline_MAE = }')
     
     def adjust_dates(self, 
                      forecast, 
@@ -487,16 +515,15 @@ class recommender():
                      start_date,
                      end_date):
         """
-        Align the dates of a forecast dataframe to those of the historical
-        values, stored in the history dataframe, using linear interpolation
-        for missing dates.
+        Align the dates of a history dataframe to those of the forecast one
+        using linear interpolation for missing dates.
     
         Inputs
         ----------
         forecast: DataFrame 
-            Source DataFrame whom dates need be adjusted.
+            Forecast of stock prices (Close)
         history: DataFrame
-            The DataFrame with reference dates.
+            History of stock prices (Close)
         start_date: Timestamp
             First date from which the predictions were requested to start
         end_date: Timestamp
@@ -508,17 +535,38 @@ class recommender():
             The adjusted DataFrame
         """
         end_date = min(end_date, history.index[-1], forecast.index[-1])
-        if start_date.dayofweek >= 5: # if starts on weekend (no prediction)
-            start_date = start_date + pd.Timedelta(7-start_date.dayofweek, 'D')
-        hmask = (history.index > start_date) & (history.index <= end_date)
-        fmask = (forecast.index > start_date) & (forecast.index <= end_date)
+        hmask = (history.index >= start_date) & (history.index <= end_date) & (history.index >= forecast.index[0])
+        fmask = (forecast.index >= start_date) & (forecast.index <= end_date)
         
         real_values = history[hmask]
         forecast = forecast[fmask]
     
-        forecast_adjusted = forecast.reindex(real_values.index).interpolate(method='time')
+        real_values_adjusted = real_values.reindex(forecast.index).interpolate(method='time')
     
-        return forecast_adjusted, real_values
+        return forecast, real_values_adjusted
+    
+    def baseline(self,
+                 real_values,
+                 first_price):
+        '''
+        Computes a baseline forecast based on the real stock price values.
+        The baseline is just a constant function.
+        
+        Inputs
+        ----------
+        real_values: Pandas DataFrame
+            The stock price historical data
+        
+        Outputs
+        ----------
+        baseline_forecast: Pandas DataFrame
+            The baseline forecast
+        '''
+        forecasted_values = [first_price] + list(real_values['Close'].values[:-1])
+        baseline_forecast = pd.DataFrame(forecasted_values,
+                                         index = real_values.index,
+                                         columns = ['Close'])
+        return baseline_forecast
 
     def compute_MAE(self, 
                     history, 
@@ -529,7 +577,7 @@ class recommender():
         Inputs
         ----------
         history: Pandas DataFrame
-            History of stock prices and other relevant data
+            History of stock prices (Close)
         forecast: Pandas DataFrame
             Dataframe with predictions of stock price and other relevant data
             
@@ -552,7 +600,7 @@ class recommender():
         Inputs
         ----------
         history: Pandas DataFrame
-            History of stock prices and other relevant data
+            History of stock prices (Close)
         forecast: Pandas DataFrame
             Dataframe with predictions of stock price and other relevant data
             

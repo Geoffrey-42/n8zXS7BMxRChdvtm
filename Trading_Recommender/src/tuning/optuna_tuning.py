@@ -99,7 +99,8 @@ def optuna_search(n_trials,
         # Simulate forecasting and recommendations
         recommend(data_args,
                   temporal_args,
-                  training_args) # performs the recommendation
+                  training_args,
+                  verbose = False) # performs the recommendation
         
         # Get the performance metric
         MSE = recommend.MSE
@@ -108,22 +109,7 @@ def optuna_search(n_trials,
     
     # Launch the optuna study
     study.optimize(objective, 
-                   n_trials = n_trials)
+                   n_trials = n_trials,
+                   n_jobs = 1)
     
-    # Print the best trial, its performance metric and its parameters
-    print("\nNumber of finished trials: ", len(study.trials))
-    print("\nBest trial:")
-    best_trial = study.best_trial
-    
-    print("  MSE: ", best_trial.value)
-    
-    print("  Params: ")
-    for key, value in best_trial.params.items():
-        print(f"    {key}: {value}")
-    
-    # Get the best parameters
-    n_a = best_trial.params['n_a']
-    learning_rate = best_trial.params['learning_rate']
-    seq_len = best_trial.params['seq_len']
-    
-    return n_a, learning_rate, seq_len
+    return study
