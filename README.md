@@ -36,9 +36,9 @@ Third, the selected features are transformed using the Principal Component Analy
 The target used for the regression task that follows is the scaled Return.  
 The unscaled Return is defined by:
 
-<div align="center">Return[i] = <sup>Close[i + horizon]</sup>&frasl;<sub>Close[i]</sub> - 1</div>  
-  
-  where horizon is the forecast window in days, here selected to be 14 days.
+<div align="center">Return[i] = <sup>Close[i + horizon]</sup>&frasl;<sub>Close[i]</sub> - 1</div>
+
+where horizon is the forecast window in days, here selected to be 14 days.
 
 ### Forecasting Models
 
