@@ -33,7 +33,7 @@ Third, the selected features are transformed using the Principal Component Analy
   - Only the Principal Components retaining about 90% of the total variance are selected, which generally results in about 10 final engineered features.
   - When tested on the binary classification task mentioned above using HIVECOTEV2 and Rocket, the accuracy is superior to the previous test results, usually in the range of 70-80%.
 
-The target used for the regression task that follows is the scaled Return.
+The target used for the regression task that follows is the scaled Return.  
 The unscaled Return is defined by:
 
 \[ \text{Return}[i] = \frac{\text{Close}[i+\text{horizon}]}{\text{Close}[i]} - 1 \]
