@@ -38,7 +38,11 @@ The unscaled Return is defined by:
 
 `Return[i] = Close[i + horizon] / Close[i] - 1`
 
-<div align="center">Return[i] = <sup>Close[i + horizon]</sup>&frasl;<sub>Close[i]</sub> - 1</div>
+<div align="center">Return[i] = <sup>Close[i + horizon]</sup>&frasl;<sub>Close[i]</sub> - 1</div>  
+
+<div align="center">
+  Return[i] = <span style="font-size: 1em;">&#40;Close[i + horizon] / Close[i]&#41;</span> - 1
+</div>  
 
 where horizon is the forecast window in days, here selected to be 14 days.
 
