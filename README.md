@@ -34,7 +34,11 @@ Third, the selected features are transformed using the Principal Component Analy
   - When tested on the binary classification task mentioned above using HIVECOTEV2 and Rocket, the accuracy is superior to the previous test results, usually in the range of 70-80%.
 
 The target used for the regression task that follows is the scaled Return.
-The unscaled Return is defined by: Return[i] = Close[i+horizon]/Close[i] - 1, where horizon is the forecast window in days, here selected to be 14 days.
+The unscaled Return is defined by:
+
+\[ \text{Return}[i] = \frac{\text{Close}[i+\text{horizon}]}{\text{Close}[i]} - 1 \]
+
+where horizon is the forecast window in days, here selected to be 14 days.
 
 ### Forecasting Models
 
