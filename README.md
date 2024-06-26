@@ -1,4 +1,4 @@
-# Stock Price Prediction and Recommendation System
+# Multivariate Stock Price Prediction and Recommendation
 
 This project implements multivariate financial time series forecasting and simulates the application of an informed trading strategy for a portfolio investment company.
 
